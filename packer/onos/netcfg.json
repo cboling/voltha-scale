@@ -1,0 +1,112 @@
+{
+  "apps": {
+    "org.opencord.aaa": {
+      "AAA": {
+        "nasIp": "172.25.0.200",
+        "radiusIp": "172.25.0.100",
+        "radiusServerPort": "1812",
+        "radiusSecret": "SECRET",
+        "radiusConnectionType": "socket",
+        "packetCustomizer": "sample"
+      }
+    },
+    "org.opencord.sadis": {
+      "sadis": {
+        "integration": {
+          "cache": {
+            "enabled": true,
+            "maxsize": 50,
+            "ttl": "PT1m"
+          }
+        },
+        "entries": [
+          {
+            "id": "TWSH80808080",
+            "sTag": 2,
+            "cTag": 102,
+            "nasPortId": "PON 1/1/3/1 1:1.1",
+            "circuitId": "PON 1/1/03/01:1.1.1",
+            "remoteId": "08:35:71:03:E5:39"
+          },
+          {
+            "id": "TWSH80808080-1",
+            "sTag": 2,
+            "cTag": 103,
+            "nasPortId": "PON 1/1/4/1 1:1.1",
+            "circuitId": "PON 1/1/04/01:1.1.1",
+            "remoteId": "08:35:71:03:E5:3A"
+          },
+          {
+            "id": "TWSH80808080-2",
+            "sTag": 2,
+            "cTag": 104,
+            "nasPortId": "PON 1/1/4/2 1:1.1",
+            "circuitId": "PON 1/1/04/02:1.1.1",
+            "remoteId": "08:35:71:03:E5:3B"
+          },
+          {
+            "id": "TWSH80808080-3",
+            "sTag": 2,
+            "cTag": 105,
+            "nasPortId": "PON 1/1/4/3 1:1.1",
+            "circuitId": "PON 1/1/04/03:1.1.1",
+            "remoteId": "08:35:71:03:E5:3C"
+          },
+          {
+            "id": "TWSH80808080-4",
+            "sTag": 2,
+            "cTag": 106,
+            "nasPortId": "PON 1/1/4/4 1:1.1",
+            "circuitId": "PON 1/1/04/04:1.1.1",
+            "remoteId": "08:35:71:03:E5:3D"
+          },
+          {
+            "id": "olt-serial-number",
+            "uplinkPort": 1,
+            "nasId": "OLT-NASID-1",
+            "hardwareIdentifier": "00:11:22:33:44:55",
+            "ipAddress" : "192.168.1.1"
+          }
+        ]
+      }
+    },
+    "org.opencord.dhcpl2relay": {
+      "dhcpl2relay": {
+        "dhcpServerConnectPoints": ["of:b122486e73010256/1025"],
+        "useOltUplinkForServerPktInOut" : false
+      }
+    }
+  },
+  "devices": {
+    "of:000000139521a26a": {
+      "accessDevice": {
+        "uplink": "1",
+        "vlan": "2"
+      }
+    },
+    "of:000000139521a269": {
+      "accessDevice": {
+        "uplink": "1",
+        "vlan": "2"
+      }
+    }
+  },
+  "links": {
+    "of:b122486e73010256/1025-of:000000139521a26a/1": {
+      "basic": {}
+    },
+    "of:000000139521a26a/1-of:b122486e73010256/1025": {
+      "basic": {}
+    }
+  },
+  "ports": {
+    "of:b122486e73010256/73": {
+      "interfaces": [
+        {
+        }
+      ]
+    }
+  },
+  "hosts": {
+  }
+}

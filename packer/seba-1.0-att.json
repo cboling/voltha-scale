@@ -1,0 +1,277 @@
+{
+  "variables": {
+    "user": "seba",
+    "password": "admin",
+    "disk_size": "30000",
+    "voltha_manifest": "https://gerrit.opencord.org/manifest -b master",
+    "cpus": "2",
+    "memory": "1024",
+    "insecure_registry": "localhost:5000"
+  },
+  "builders": [
+    {
+      "type": "qemu",
+      "name": "voltha-1.x",
+      "format": "qcow2",
+      "accelerator": "kvm",
+      "disk_size": "{{ user `disk_size` }}",
+      "headless": "false",
+      "iso_url": "http://releases.ubuntu.com/16.04.5/ubuntu-16.04.5-server-amd64.iso",
+      "iso_checksum": "24636fd103a2a43c95659f1c3c63718e",
+      "iso_checksum_type": "md5",
+      "http_directory": "preseeds",
+      "ssh_username": "{{ user `user` }}",
+      "ssh_password": "{{ user `password` }}",
+      "ssh_wait_timeout": "20m",
+      "ssh_port": 22,
+      "shutdown_command": "echo '{{ user `password` }}'|sudo -S shutdown -P now",
+      "net_device": "virtio-net",
+      "vm_name": "voltha-1.x",
+      "boot_wait": "5s",
+      "boot_command": [
+        "<enter><wait>",
+        "<f6><esc>",
+        "<bs><bs><bs><bs><bs><bs><bs><bs><bs><bs>",
+        "<bs><bs><bs><bs><bs><bs><bs><bs><bs><bs>",
+        "<bs><bs><bs><bs><bs><bs><bs><bs><bs><bs>",
+        "<bs><bs><bs><bs><bs><bs><bs><bs><bs><bs>",
+        "<bs><bs><bs><bs><bs><bs><bs><bs><bs><bs>",
+        "<bs><bs><bs><bs><bs><bs><bs><bs><bs><bs>",
+        "<bs><bs><bs><bs><bs><bs><bs><bs><bs><bs>",
+        "<bs><bs><bs><bs><bs><bs><bs><bs><bs><bs>",
+        "<bs><bs><bs>",
+        "/install/vmlinuz<wait>",
+        " url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.cfg<wait>",
+        " auto<wait>",
+        " auto-install/enable=true<wait>",
+        " debconf/priority=critical<wait>",
+        " debconf/frontend=noninteractive<wait>",
+        " debian-installer=en_US<wait>",
+        " hostname={{ .Name }}<wait>",
+        " fb=false<wait>",
+        " initrd=/install/initrd.gz<wait>",
+        " grub-installer/bootdev=/dev/vda<wait>",
+        " noapic<wait>",
+        " locale=en_US<wait>",
+        " -- <wait>",
+        "<enter><wait>"
+      ],
+      "qemuargs": [
+        [ "-m", "{{ user `memory` }}" ],
+        [ "-smp", "cpus={{ user `cpus` }}"]
+      ]
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "shell",
+      "execute_command": "echo '{{ user `password` }}' | {{ .Vars }} sudo -E -S sh '{{ .Path }}'",
+      "inline": [
+        "echo '%sudo    ALL=(ALL)  NOPASSWD:ALL' >> /etc/sudoers",
+        "echo 'Defaults exempt_group=sudo' >> /etc/sudoers",
+        "echo '{{user `user`}}   ALL=NOPASSWD: ALL' >> /etc/sudoers"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "sudo apt-get update",
+        "sudo apt-get install -y make curl virtualenv gcc python-dev libssl-dev libpcap-dev g++",
+        "sudo apt-get install -y git software-properties-common httpie jq debian-keyring",
+        "sudo apt-get install -y debian-archive-keyring python-nose python-flake8 python-scapy"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "echo \"Installing Docker...\"",
+        "sudo apt-key adv --keyserver keyserver.ubuntu.com --recv 0EBFCD88",
+        "curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -",
+        "sudo add-apt-repository \"deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\"",
+        "sudo apt-get update",
+        "sudo apt-get install -y \"docker-ce=17.03*\"",
+        "sudo usermod -aG docker voltha",
+        "echo \"Updating Docker Options file...\"",
+        "sudo sed -i '/#DOCKER_OPTS=\"--dns 8.8.8.8 --dns 8.8.4.4\"/c\\DOCKER_OPTS=\"--dns 8.8.8.8 --dns 8.8.4.4 --insecure-registry {{ user `insecure_registry` }}\"' /etc/default/docker",
+        "sudo service docker restart"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "echo \"Installing Kubernetes...\"",
+        "sudo apt-get install -y ebtables ethtool apt-transport-https",
+        "curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -",
+        "echo \"deb http://apt.kubernetes.io/ kubernetes-xenial main\" >/tmp/kubernetes.list",
+        "echo >>/tmp/kubernetes.list",
+        "sudo cp /tmp/kubernetes.list /etc/apt/sources.list.d/kubernetes.list",
+        "sudo apt-get update",
+        "sudo apt install -y \"kubeadm=1.11.3-*\" \"kubelet=1.11.3-*\" \"kubectl=1.11.3-*\"",
+        "sudo swapoff -a",
+        "sudo kubeadm init --pod-network-cidr=192.168.0.0/16",
+        "mkdir -p /home/{{user `user`}}/.kube",
+        "sudo cp -i /etc/kubernetes/admin.conf /home/{{user `user`}}/.kube/config",
+        "sudo chown $(id -u):$(id -g) /home/{{user `user`}}/.kube/config",
+        "kubectl taint nodes --all node-role.kubernetes.io/master-"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "echo \"Installing Calico CNI Plugin...\"",
+        "kubectl apply -f https://docs.projectcalico.org/v2.6/getting-started/kubernetes/installation/hosted/kubeadm/1.6/calico.yaml",
+        "echo \"Pause to allow kubectl to complete\" && sleep 20"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "echo \"Installing helm...\"",
+        "curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash",
+        "cat > /tmp/helm.yaml <<EOF\napiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: helm\n  namespace: kube-system\n---\napiVersion: rbac.authorization.k8s.io/v1beta1\nkind: ClusterRoleBinding\nmetadata:\n  name: helm\nroleRef:\n  apiGroup: rbac.authorization.k8s.io\n  kind: ClusterRole\n  name: cluster-admin\nsubjects:\n  - kind: ServiceAccount\n    name: helm\n    namespace: kube-system\nEOF",
+        "kubectl create -f /tmp/helm.yaml",
+        "helm init --service-account helm",
+        "helm repo add incubator https://kubernetes-charts-incubator.storage.googleapis.com/"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "echo \"Installing SEBA Helm charts...\"",
+        "cd /home/{{user `user`}} && git clone https://gerrit.opencord.org/helm-charts"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "Installing kafka and ONOS...",
+        "cd /home/seba/helm-charts",
+        "helm repo add incubator http://storage.googleapis.com/kubernetes-charts-incubator",
+        "helm install -n cord-kafka --version=0.13.3 -f examples/kafka-single.yaml incubator/kafka",
+        "echo",
+        "echo Pausing to allow kafka to come up...",
+        "kubectl wait pod/cord-kafka-0 --for condition=Ready --timeout=180s",
+        "helm install -n onos -f configs/onos.yaml onos"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "Installing VOLTHA charts...",
+        "cd /home/seba/helm-charts",
+        "helm install -n etcd-operator stable/etcd-operator --version 0.8.3",
+        "echo",
+        "echo Pausing to allow etcd-operator enough time to create the etcdCluster to come up...",
+        "sleep 60",
+        "helm dep up voltha",
+        "helm install -n voltha -f configs/seba-ponsim.yaml voltha"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "Installing PONSIM charts...",
+        "cd /home/seba/helm-charts",
+        "helm install -n ponnet ponnet",
+        "echo Pausing to allow CNI changes...",
+        "scripts/wait_for_pods.sh kube-system",
+        "helm install -n ponsimv2 ponsimv2",
+        "sudo iptables -P FORWARD ACCEPT"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "echo \"Installing Mininet...\"",
+        "cd /home/{{user `user`}}/helm-charts",
+        "sudo modprobe openvswitch",
+        "helm install -n mininet mininet",
+        "scripts/wait_for_pods.sh kube-system",
+        "kubectl attach -ti deployment.apps/mininet"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "Enable pon0 to forward EAPOL packets...",
+        "echo 8 > /tmp/pon0_group_fwd_mask",
+        "sudo cp /tmp/pon0_group_fwd_mask /sys/class/net/pon0/bridge/group_fwd_mask"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "cd /home/seba/helm-charts",
+        "Install NEM charts...",
+        "helm dep update xos-core",
+        "helm install -n xos-core xos-core",
+        "helm dep update xos-profiles/seba-services",
+        "helm install -n seba-services xos-profiles/seba-services",
+        "helm dep update workflows/att-workflow",
+        "helm install -n att-workflow workflows/att-workflow -f configs/seba-ponsim.yaml",
+        "helm dep update xos-profiles/base-kubernetes",
+        "helm install -n base-kubernetes xos-profiles/base-kubernetes",
+        "/scripts/wait_for_pods.sh"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "Load TOSCA into NEM...",
+        "cd /home/seba/helm-charts",
+        "helm install -n ponsim-pod xos-profiles/ponsim-pod",
+        "/scripts/wait_for_pods.sh"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "ONOS customizations...",
+        "http -a karaf:karaf POST http://127.0.0.1:30120/onos/v1/configuration/org.opencord.olt.impl.Olt defaultVlan=65535"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "curl https://storage.googleapis.com/git-repo-downloads/repo >/tmp/repo",
+        "chmod a+x /tmp/repo",
+        "sudo mv /tmp/repo /usr/bin"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "mkdir /home/seba/opencord",
+        "cd /home/seba/opencord && repo init `voltha_manifest`",
+        "cd /home/seba/opencord && repo sync",
+        "# cd /home/seba/opencord/incubator/voltha && . ./env.sh && make fetch",
+        "# cd /home/seba/opencord/incubator/voltha && . ./env.sh && make build"
+      ]
+    },
+    {
+      "type": "file",
+      "source": "seba_start.sh",
+      "destination": "/home/seba/seba_start.sh"
+    },
+    {
+      "type": "file",
+      "source": "seba_stop.sh",
+      "destination": "/home/seba/seba_stop.sh"
+    },
+    {
+      "type": "file",
+      "source": "onu_mock",
+      "destination": "/home/seba/onu_mock"
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "sudo chmod a+x seba_start.sh",
+        "sudo chmod a+x seba_stop.sh",
+        "sudo chmod a+x onu_mock",
+        "sudo mv onu_mock /etc/init.d/",
+        "sudo update-rc.d onu_mock defaults"
+      ]
+    }
+  ]
+}

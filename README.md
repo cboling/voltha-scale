@@ -18,15 +18,40 @@ for other purposes as well.
 - A server to run the created qcow's on.  I would suggest devoting at least 4 vCPUs
   and 8GB to the launched images.  SEBA scale testing will probably be more.
   An exact number for both configurations is still TBD, so the requirements may be less.
+  
+### Installing Packer on a MAC
+To install and run packer on a MAC, you need to go to the download page for
+[Packer Downloads](https://packer.io/downoads.html) and download the 64-bit ZIP
+image.  Unzip this file to your favorite tools directory and then make sure your
+PATH points to that directly
+
+### Installing libvirt & QEMU on a MAC
+_libvirt_ is available via:
+```bash
+brew install libvirt qemu
+```
+
+Once _libvirt_ is installed, you can request it to run at system startup via:
+```bash
+brew services start libvirt
+```
+
+_virt-manager_ is available via:
+```bash
+brew tap jeffreywildman/homebrew-virt-manager
+brew install virt-manager virt-viewer
+```
 
 ## Building QCOW3 images
-The packer subdirectory contains a number of packer JSON file for building test images.
+The packer subdirectory contains a number of packer JSON file for building test images. Unless
+otherwise specified, the host machine for the builds are Ubuntu 16.04.
 
-| File              | username/pwd  | Description |
-| ----------------- | :-----------: | :---------- |
-| voltha-1.x.json   | voltha/admin  | Creates a qcow image with the latest VOLTHA v1.x containers |
-| voltha-2.0.json   | voltha/admin  | Creates a qcow image with the latest VOLTHA v2.0 containers |
-| seba-1.0-att.json | seba/admin    | Creates a qcow image with the latest SEBA v1.0 containers (AT&T workflow) |
+| File                   | username/pwd  | Description |
+| ---------------------- | :-----------: | :---------- |
+| voltha-1.x.json        | voltha/admin  | Creates a qcow image with the latest VOLTHA v1.x containers |
+| voltha-1.x.mac-os.json | voltha/admin  | Creates a qcow image with the latest VOLTHA v1.x containers on MAC-OS |
+| voltha-2.0.json        | voltha/admin  | Creates a qcow image with the latest VOLTHA v2.0 containers |
+| seba-1.0-att.json      | seba/admin    | Creates a qcow image with the latest SEBA v1.0 containers (AT&T workflow) |
 
 All images built at this time are for single-image deployment.  Cluster support is a future goal.
 

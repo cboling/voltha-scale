@@ -13,11 +13,12 @@
   "builders": [
     {
       "type": "qemu",
-      "name": "voltha-1.x",
+      "name": "voltha-1.6",
       "format": "qcow2",
-      "accelerator": "kvm",
+      "accelerator": "hvf",
       "disk_size": "{{ user `disk_size` }}",
       "headless": "false",
+      "use_default_display": "true",
       "iso_url": "http://releases.ubuntu.com/16.04.5/ubuntu-16.04.5-server-amd64.iso",
       "iso_checksum": "24636fd103a2a43c95659f1c3c63718e",
       "iso_checksum_type": "md5",
@@ -54,6 +55,7 @@
         " initrd=/install/initrd.gz<wait>",
         " grub-installer/bootdev=/dev/vda<wait>",
         " noapic<wait>",
+        " locale=en_US<wait>",
         " -- <wait>",
         "<enter><wait>"
       ],
@@ -108,51 +110,6 @@
     {
       "type": "shell",
       "inline": [
-        "echo \"Installing Kubernetes...\"",
-        "sudo apt-get install -y ebtables ethtool apt-transport-https",
-        "curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -",
-        "echo \"deb http://apt.kubernetes.io/ kubernetes-xenial main\" >/tmp/kubernetes.list",
-        "echo >>/tmp/kubernetes.list",
-        "sudo cp /tmp/kubernetes.list /etc/apt/sources.list.d/kubernetes.list",
-        "sudo apt-get update",
-        "sudo apt install -y \"kubeadm={{ user `k8s_version` }}\" \"kubelet={{ user `k8s_version` }}\" \"kubectl={{ user `k8s_version` }}\" \"kubernetes-cni={{ user `k8s_cni_version` }}\"",
-        "sudo swapoff -a",
-        "sudo kubeadm init --pod-network-cidr=192.168.0.0/16",
-        "mkdir -p /home/{{user `user`}}/.kube",
-        "sudo cp -i /etc/kubernetes/admin.conf /home/{{user `user`}}/.kube/config",
-        "sudo chown $(id -u):$(id -g) /home/{{user `user`}}/.kube/config",
-        "kubectl taint nodes --all node-role.kubernetes.io/master-"
-      ]
-    },
-    {
-      "type": "shell",
-      "inline": [
-        "echo \"Installing Calico CNI Plugin...\"",
-        "kubectl apply -f https://docs.projectcalico.org/v2.6/getting-started/kubernetes/installation/hosted/kubeadm/1.6/calico.yaml",
-        "echo \"20 Second pause to allow kubectl to complete\" && sleep 20"
-      ]
-    },
-    {
-      "type": "shell",
-      "inline": [
-        "echo \"Installing helm...\"",
-        "curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash",
-        "cat > /tmp/helm.yaml <<EOF\napiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: helm\n  namespace: kube-system\n---\napiVersion: rbac.authorization.k8s.io/v1beta1\nkind: ClusterRoleBinding\nmetadata:\n  name: helm\nroleRef:\n  apiGroup: rbac.authorization.k8s.io\n  kind: ClusterRole\n  name: cluster-admin\nsubjects:\n  - kind: ServiceAccount\n    name: helm\n    namespace: kube-system\nEOF",
-        "kubectl create -f /tmp/helm.yaml",
-        "helm init --service-account helm",
-        "helm repo add incubator https://kubernetes-charts-incubator.storage.googleapis.com/"
-      ]
-    },
-    {
-      "type": "shell",
-      "inline": [
-        "echo \"Installing SEBA Helm charts...\"",
-        "cd /home/{{user `user`}} && git clone https://gerrit.opencord.org/helm-charts"
-      ]
-    },
-    {
-      "type": "shell",
-      "inline": [
         "echo \"Installing VOLTHA Source in case local changes/builds are required...\"",
         "echo \"\"",
         "echo \"\"",
@@ -167,11 +124,11 @@
         "chmod a+x /tmp/repo",
         "sudo mv /tmp/repo /usr/bin",
         "mkdir /home/{{user `user`}}/opencord",
-        "cd /home/{{user `user`}}/opencord && repo init -u https://gerrit.opencord.org/manifest -b master",
+        "cd /home/{{user `user`}}/opencord && repo init -u https://github.com/cboling/voltha-manifest -m voltha-1.6.xml",
         "cd /home/{{user `user`}}/opencord/ && repo sync",
-        "cd /home/{{user `user`}}/opencord/incubator/voltha && git checkout master",
-        "# cd /home/{{user `user`}}/opencord/incubator/voltha && . ./env.sh && make fetch",
-        "# cd /home/{{user `user`}}/opencord/incubator/voltha && . ./env.sh && make build"
+        "cd /home/{{user `user`}}/opencord/voltha && git checkout voltha-1.6",
+        "# cd /home/{{user `user`}}/opencord/voltha && . ./env.sh && make fetch",
+        "# cd /home/{{user `user`}}/opencord/voltha && . ./env.sh && make build"
       ]
     },
     {
@@ -215,9 +172,7 @@
       "type": "shell",
       "inline": [
         "echo \"Creating support directories...\"",
-        "mkdir -p /home/{{user `user`}}/compose",
-        "mkdir -p /home/{{user `user`}}/k8s",
-        "mkdir -p /home/{{user `user`}}/mocks"
+        "mkdir -p /home/{{user `user`}}/compose"
       ]
     },
     {
@@ -237,16 +192,6 @@
       "type": "file",
       "source": "voltha/voltha_compose_stop.sh",
       "destination": "/home/{{user `user`}}/voltha_stop.sh"
-    },
-    {
-      "type": "file",
-      "source": "voltha/voltha_k8s_start.sh",
-      "destination": "/home/{{user `user`}}/voltha_k8s_start.sh"
-    },
-    {
-      "type": "file",
-      "source": "voltha/voltha_k8s_stop.sh",
-      "destination": "/home/{{user `user`}}/voltha_k8s_stop.sh"
     },
     {
       "type": "file",

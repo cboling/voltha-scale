@@ -3,7 +3,6 @@
     "user": "voltha",
     "password": "admin",
     "disk_size": "20000",
-    "voltha_manifest": "https://gerrit.opencord.org/manifest -b master",
     "cpus": "2",
     "memory": "1024",
     "insecure_registry": "localhost:5000",
@@ -156,7 +155,7 @@
     {
       "type": "shell",
       "inline": [
-        "echo \"Installing Voltha Source in case local changes/builds are required...\"",
+        "echo \"Installing VOLTHA Source in case local changes/builds are required...\"",
         "echo \"\"",
         "echo \"\"",
         "echo \"   ***************************************************************************\"",
@@ -170,7 +169,7 @@
         "chmod a+x /tmp/repo",
         "sudo mv /tmp/repo /usr/bin",
         "mkdir /home/{{user `user`}}/opencord",
-        "cd /home/{{user `user`}}/opencord && repo init -u {{ user `voltha_manifest` }}",
+        "cd /home/{{user `user`}}/opencord && repo init -u https://gerrit.opencord.org/manifest -b master",
         "cd /home/{{user `user`}}/opencord/ && repo sync",
         "cd /home/{{user `user`}}/opencord/incubator/voltha && git checkout master",
         "# cd /home/{{user `user`}}/opencord/incubator/voltha && . ./env.sh && make fetch",
@@ -233,13 +232,23 @@
     },
     {
       "type": "file",
-      "source": "voltha/voltha_start.sh",
+      "source": "voltha/voltha_compose_start.sh",
       "destination": "/home/{{user `user`}}/voltha_start.sh"
     },
     {
       "type": "file",
-      "source": "voltha/voltha_stop.sh",
+      "source": "voltha/voltha_compose_stop.sh",
       "destination": "/home/{{user `user`}}/voltha_stop.sh"
+    },
+    {
+      "type": "file",
+      "source": "voltha/voltha_k8s_start.sh",
+      "destination": "/home/{{user `user`}}/voltha_k8s_start.sh"
+    },
+    {
+      "type": "file",
+      "source": "voltha/voltha_k8s_stop.sh",
+      "destination": "/home/{{user `user`}}/voltha_k8s_stop.sh"
     },
     {
       "type": "file",

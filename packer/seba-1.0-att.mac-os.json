@@ -1,8 +1,8 @@
 {
   "variables": {
-    "user": "voltha",
+    "user": "seba",
     "password": "admin",
-    "disk_size": "20000",
+    "disk_size": "30000",
     "voltha_manifest": "https://gerrit.opencord.org/manifest -b master",
     "cpus": "2",
     "memory": "1024",
@@ -14,7 +14,7 @@
   "builders": [
     {
       "type": "qemu",
-      "name": "voltha-1.x",
+      "name": "seba-1.x",
       "format": "qcow2",
       "accelerator": "hvf",
       "disk_size": "{{ user `disk_size` }}",
@@ -30,7 +30,7 @@
       "ssh_port": 22,
       "shutdown_command": "echo '{{ user `password` }}'|sudo -S shutdown -P now",
       "net_device": "virtio-net",
-      "vm_name": "voltha-1.x",
+      "vm_name": "seba-1.x",
       "boot_wait": "5s",
       "boot_command": [
         "<enter><wait>",
@@ -45,7 +45,7 @@
         "<bs><bs><bs><bs><bs><bs><bs><bs><bs><bs>",
         "<bs><bs><bs>",
         "/install/vmlinuz<wait>",
-        " url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.{{user `user`}}.cfg<wait>",
+        " url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.cfg<wait>",
         " auto<wait>",
         " auto-install/enable=true<wait>",
         " debconf/priority=critical<wait>",
@@ -94,18 +94,10 @@
         "sudo add-apt-repository \"deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\"",
         "sudo apt-get update",
         "sudo apt-get install -y \"{{ user `docker_version` }}\"",
-        "sudo usermod -aG docker {{user `user`}}",
+        "sudo usermod -aG docker seba",
         "echo \"Updating Docker Options file...\"",
         "sudo sed -i '/#DOCKER_OPTS=\"--dns 8.8.8.8 --dns 8.8.4.4\"/c\\DOCKER_OPTS=\"--dns 8.8.8.8 --dns 8.8.4.4 --insecure-registry {{ user `insecure_registry` }}\"' /etc/default/docker",
         "sudo service docker restart"
-      ]
-    },
-    {
-      "type": "shell",
-      "inline": [
-        "echo \"Installing Docker-Compose...\"",
-        "sudo curl -o /usr/local/bin/docker-compose -L \"https://github.com/docker/compose/releases/download/1.8.1/docker-compose-$(uname -s)-$(uname -m)\"",
-        "sudo chmod 755 /usr/local/bin/docker-compose"
       ]
     },
     {
@@ -156,119 +148,133 @@
     {
       "type": "shell",
       "inline": [
-        "echo \"Installing Voltha Source in case local changes/builds are required...\"",
-        "echo \"\"",
-        "echo \"\"",
-        "echo \"   ***************************************************************************\"",
-        "echo \"   ****                                                                   ****\"",
-        "echo \"   **** This step can be omitted if local changes/builds are not required ****\"",
-        "echo \"   ****                                                                   ****\"",
-        "echo \"   ***************************************************************************\"",
-        "echo \"\"",
-        "echo \"\"",
+        "Installing kafka and ONOS...",
+        "cd /home/seba/helm-charts",
+        "helm repo add incubator http://storage.googleapis.com/kubernetes-charts-incubator",
+        "helm install -n cord-kafka --version=0.13.3 -f examples/kafka-single.yaml incubator/kafka",
+        "echo",
+        "echo Pausing to allow kafka to come up...",
+        "kubectl wait pod/cord-kafka-0 --for condition=Ready --timeout=180s",
+        "helm install -n onos -f configs/onos.yaml onos"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "Installing VOLTHA charts...",
+        "cd /home/seba/helm-charts",
+        "helm install -n etcd-operator stable/etcd-operator --version 0.8.3",
+        "echo",
+        "echo Pausing to allow etcd-operator enough time to create the etcdCluster to come up...",
+        "sleep 60",
+        "helm dep up voltha",
+        "helm install -n voltha -f configs/seba-ponsim.yaml voltha"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "Installing PONSIM charts...",
+        "cd /home/seba/helm-charts",
+        "helm install -n ponnet ponnet",
+        "echo Pausing to allow CNI changes...",
+        "scripts/wait_for_pods.sh kube-system",
+        "helm install -n ponsimv2 ponsimv2",
+        "sudo iptables -P FORWARD ACCEPT"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "echo \"Installing Mininet...\"",
+        "cd /home/{{user `user`}}/helm-charts",
+        "sudo modprobe openvswitch",
+        "helm install -n mininet mininet",
+        "scripts/wait_for_pods.sh kube-system",
+        "kubectl attach -ti deployment.apps/mininet"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "Enable pon0 to forward EAPOL packets...",
+        "echo 8 > /tmp/pon0_group_fwd_mask",
+        "sudo cp /tmp/pon0_group_fwd_mask /sys/class/net/pon0/bridge/group_fwd_mask"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "cd /home/seba/helm-charts",
+        "Install NEM charts...",
+        "helm dep update xos-core",
+        "helm install -n xos-core xos-core",
+        "helm dep update xos-profiles/seba-services",
+        "helm install -n seba-services xos-profiles/seba-services",
+        "helm dep update workflows/att-workflow",
+        "helm install -n att-workflow workflows/att-workflow -f configs/seba-ponsim.yaml",
+        "helm dep update xos-profiles/base-kubernetes",
+        "helm install -n base-kubernetes xos-profiles/base-kubernetes",
+        "/scripts/wait_for_pods.sh"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "Load TOSCA into NEM...",
+        "cd /home/seba/helm-charts",
+        "helm install -n ponsim-pod xos-profiles/ponsim-pod",
+        "/scripts/wait_for_pods.sh"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "ONOS customizations...",
+        "http -a karaf:karaf POST http://127.0.0.1:30120/onos/v1/configuration/org.opencord.olt.impl.Olt defaultVlan=65535"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
         "curl https://storage.googleapis.com/git-repo-downloads/repo >/tmp/repo",
         "chmod a+x /tmp/repo",
-        "sudo mv /tmp/repo /usr/bin",
-        "mkdir /home/{{user `user`}}/opencord",
-        "cd /home/{{user `user`}}/opencord && repo init -u {{ user `voltha_manifest` }}",
-        "cd /home/{{user `user`}}/opencord/ && repo sync",
-        "cd /home/{{user `user`}}/opencord/incubator/voltha && git checkout master",
-        "# cd /home/{{user `user`}}/opencord/incubator/voltha && . ./env.sh && make fetch",
-        "# cd /home/{{user `user`}}/opencord/incubator/voltha && . ./env.sh && make build"
+        "sudo mv /tmp/repo /usr/bin"
       ]
     },
     {
       "type": "shell",
       "inline": [
-        "echo \"Installing latest MINIMAL VOLTHA and support containers from Docker Hub...\"",
-        "sudo docker pull wurstmeister/zookeeper:latest",
-        "sudo docker pull wurstmeister/kafka:latest",
-        "sudo docker pull consul:0.9.2",
-        "sudo docker pull gliderlabs/registrator:latest",
-        "sudo docker pull fluent/fluentd:v0.12.42",
-        "sudo docker pull voltha/voltha-envoy",
-        "sudo docker pull voltha/voltha-voltha",
-        "sudo docker pull voltha/voltha-cli",
-        "sudo docker pull voltha/voltha-ofagent",
-        "sudo docker pull tpdock/freeradius:latest",
-        "sudo docker pull voltha/voltha-onos:latest"
-      ]
-    },
-    {
-      "type": "shell",
-      "inline": [
-        "echo \"Installing latest accessory VOLTHA and support containers from Docker Hub...\"",
-        "echo \"\"",
-        "echo \"\"",
-        "echo \"   *********************************************************************\"",
-        "echo \"   ****                                                             ****\"",
-        "echo \"   **** This step can be omitted if only automated tests are needed ****\"",
-        "echo \"   ****                                                             ****\"",
-        "echo \"   *********************************************************************\"",
-        "echo \"\"",
-        "echo \"\"",
-        "sudo docker pull voltha/voltha-grafana",
-        "sudo docker pull voltha/voltha-shovel",
-        "sudo docker pull voltha/voltha-netconf",
-        "sudo docker pull voltha/voltha-nginx",
-        "sudo docker pull voltha/voltha-portainer"
-      ]
-    },
-    {
-      "type": "shell",
-      "inline": [
-        "echo \"Creating support directories...\"",
-        "mkdir -p /home/{{user `user`}}/compose",
-        "mkdir -p /home/{{user `user`}}/k8s",
-        "mkdir -p /home/{{user `user`}}/mocks"
-      ]
-    },
-    {
-      "type": "shell",
-      "inline": [
-        "echo \"Enabling console access...\"",
-        "sudo systemctl enable serial-getty@ttyS0.service",
-        "sudo systemctl start serial-getty@ttyS0.service"
+        "mkdir /home/seba/opencord",
+        "cd /home/seba/opencord && repo init `voltha_manifest`",
+        "cd /home/seba/opencord && repo sync",
+        "# cd /home/seba/opencord/incubator/voltha && . ./env.sh && make fetch",
+        "# cd /home/seba/opencord/incubator/voltha && . ./env.sh && make build"
       ]
     },
     {
       "type": "file",
-      "source": "voltha/voltha_start.sh",
-      "destination": "/home/{{user `user`}}/voltha_start.sh"
+      "source": "seba_start.sh",
+      "destination": "/home/seba/seba_start.sh"
     },
     {
       "type": "file",
-      "source": "voltha/voltha_stop.sh",
-      "destination": "/home/{{user `user`}}/voltha_stop.sh"
+      "source": "seba_stop.sh",
+      "destination": "/home/seba/seba_stop.sh"
     },
     {
       "type": "file",
-      "source": "voltha/voltha",
-      "destination": "/home/{{user `user`}}/voltha"
-    },
-    {
-      "type": "file",
-      "source": "voltha/.env",
-      "destination": "/home/{{user `user`}}/.env"
-    },
-    {
-      "type": "file",
-      "source": "compose/docker-compose-auth-test.yml",
-      "destination": "/home/{{user `user`}}/compose/docker-compose-auth-test.yml"
-    },
-    {
-      "type": "file",
-      "source": "compose/docker-compose-min-system-test.yml",
-      "destination": "/home/{{user `user`}}/compose/docker-compose-min-system-test.yml"
+      "source": "onu_mock",
+      "destination": "/home/seba/onu_mock"
     },
     {
       "type": "shell",
       "inline": [
-        "sudo chmod a+x voltha_start.sh",
-        "sudo chmod a+x voltha_stop.sh",
-        "sudo chmod a+x voltha",
-        "sudo cp voltha  /etc/init.d/",
-        "sudo update-rc.d voltha defaults"
+        "sudo chmod a+x seba_start.sh",
+        "sudo chmod a+x seba_stop.sh",
+        "sudo chmod a+x onu_mock",
+        "sudo mv onu_mock /etc/init.d/",
+        "sudo update-rc.d onu_mock defaults"
       ]
     }
   ]

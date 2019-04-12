@@ -241,11 +241,11 @@
     {
       "type": "shell",
       "inline": [
-        "mkdir /home/seba/opencord",
-        "cd /home/seba/opencord && repo init `voltha_manifest`",
-        "cd /home/seba/opencord && repo sync",
-        "# cd /home/seba/opencord/incubator/voltha && . ./env.sh && make fetch",
-        "# cd /home/seba/opencord/incubator/voltha && . ./env.sh && make build"
+        "mkdir -p /home/{{user `user`}}/opencord",
+        "cd /home/{{user `user`}}/opencord && repo init `voltha_manifest`",
+        "cd /home/{{user `user`}}/opencord && repo sync",
+        "# cd /home/{{user `user`}}/opencord/incubator/voltha && . ./env.sh && make fetch",
+        "# cd /home/{{user `user`}}/opencord/incubator/voltha && . ./env.sh && make build"
       ]
     },
     {

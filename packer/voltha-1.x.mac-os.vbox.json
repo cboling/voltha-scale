@@ -3,22 +3,23 @@
     "user": "voltha",
     "password": "admin",
     "disk_size": "20000",
-    "cpus": "2",
-    "memory": "1024",
+    "cpus": "4",
+    "memory": "6144",
     "insecure_registry": "localhost:5000",
     "docker_version": "docker-ce=17.03*",
     "k8s_version": "1.11.3-*",
-    "k8s_cni_version": "0.6.0-*"
+    "k8s_cni_version": "0.6.0-*",
+    "pod_network_cidr": "192.168.0.0/16"
   },
   "builders": [
     {
-      "type": "qemu",
-      "name": "voltha-1.x",
-      "format": "qcow2",
-      "accelerator": "hvf",
+      "type": "virtualbox-iso",
+      "guest_os_type": "Ubuntu_64",
+      "vm_name": "voltha-1.x",
+      "name": "voltha-1.x.ovf",
+      "format": "ovf",
       "disk_size": "{{ user `disk_size` }}",
       "headless": "false",
-      "use_default_display": "true",
       "iso_url": "http://releases.ubuntu.com/16.04.5/ubuntu-16.04.5-server-amd64.iso",
       "iso_checksum": "24636fd103a2a43c95659f1c3c63718e",
       "iso_checksum_type": "md5",
@@ -28,8 +29,11 @@
       "ssh_wait_timeout": "20m",
       "ssh_port": 22,
       "shutdown_command": "echo '{{ user `password` }}'|sudo -S shutdown -P now",
-      "net_device": "virtio-net",
-      "vm_name": "voltha-1.x",
+      "vboxmanage": [
+        ["modifyvm", "{{.Name}}", "--cpus", "{{user `cpus`}}"],
+        ["modifyvm", "{{.Name}}", "--memory", "{{user `memory`}}"],
+        ["modifyvm", "{{.Name}}", "--nic1", "nat"]
+      ],
       "boot_wait": "5s",
       "boot_command": [
         "<enter><wait>",
@@ -44,7 +48,7 @@
         "<bs><bs><bs><bs><bs><bs><bs><bs><bs><bs>",
         "<bs><bs><bs>",
         "/install/vmlinuz<wait>",
-        " url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.{{user `user`}}.cfg<wait>",
+        " url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.{{user `user`}}.vbox.cfg<wait>",
         " auto<wait>",
         " auto-install/enable=true<wait>",
         " debconf/priority=critical<wait>",
@@ -53,15 +57,11 @@
         " hostname={{ .Name }}<wait>",
         " fb=false<wait>",
         " initrd=/install/initrd.gz<wait>",
-        " grub-installer/bootdev=/dev/vda<wait>",
+        " grub-installer/bootdev=/dev/sda<wait>",
         " noapic<wait>",
         " locale=en_US<wait>",
         " -- <wait>",
         "<enter><wait>"
-      ],
-      "qemuargs": [
-        [ "-m", "{{ user `memory` }}" ],
-        [ "-smp", "cpus={{ user `cpus` }}"]
       ]
     }
   ],
@@ -78,6 +78,7 @@
     {
       "type": "shell",
       "inline": [
+        "echo \"Installing python base...\"",
         "sudo apt-get update",
         "sudo apt-get install -y make curl virtualenv gcc python-dev libssl-dev libpcap-dev g++",
         "sudo apt-get install -y git htop software-properties-common httpie jq debian-keyring",
@@ -96,6 +97,7 @@
         "sudo usermod -aG docker {{user `user`}}",
         "echo \"Updating Docker Options file...\"",
         "sudo sed -i '/#DOCKER_OPTS=\"--dns 8.8.8.8 --dns 8.8.4.4\"/c\\DOCKER_OPTS=\"--dns 8.8.8.8 --dns 8.8.4.4 --insecure-registry {{ user `insecure_registry` }}\"' /etc/default/docker",
+        "echo \"Restarting Docker...\"",
         "sudo service docker restart"
       ]
     },
@@ -119,11 +121,14 @@
         "sudo apt-get update",
         "sudo apt install -y \"kubeadm={{ user `k8s_version` }}\" \"kubelet={{ user `k8s_version` }}\" \"kubectl={{ user `k8s_version` }}\" \"kubernetes-cni={{ user `k8s_cni_version` }}\"",
         "sudo swapoff -a",
-        "sudo kubeadm init --pod-network-cidr=192.168.0.0/16",
+        "echo \"Initializing Kubernetes Pod...\"",
+        "sudo kubeadm init --pod-network-cidr={{user `pod_network_cidr`}}",
+        "echo \"20 Second pause to allow kubeadm to complete\" && sleep 20",
         "mkdir -p /home/{{user `user`}}/.kube",
         "sudo cp -i /etc/kubernetes/admin.conf /home/{{user `user`}}/.kube/config",
         "sudo chown $(id -u):$(id -g) /home/{{user `user`}}/.kube/config",
-        "kubectl taint nodes --all node-role.kubernetes.io/master-"
+        "kubectl taint nodes --all node-role.kubernetes.io/master-",
+        "echo \"20 Second pause to allow kubectl to complete\" && sleep 20"
       ]
     },
     {
@@ -131,7 +136,7 @@
       "inline": [
         "echo \"Installing Calico CNI Plugin...\"",
         "kubectl apply -f https://docs.projectcalico.org/v2.6/getting-started/kubernetes/installation/hosted/kubeadm/1.6/calico.yaml",
-        "echo \"20 Second pause to allow kubectl to complete\" && sleep 20"
+        "echo \"30 Second pause to allow kubectl to complete\" && sleep 30"
       ]
     },
     {
@@ -168,7 +173,7 @@
         "curl https://storage.googleapis.com/git-repo-downloads/repo >/tmp/repo",
         "chmod a+x /tmp/repo",
         "sudo mv /tmp/repo /usr/bin",
-        "mkdir -p /home/{{user `user`}}/opencord",
+        "mkdir /home/{{user `user`}}/opencord",
         "cd /home/{{user `user`}}/opencord && repo init -u https://gerrit.opencord.org/manifest -b master",
         "cd /home/{{user `user`}}/opencord/ && repo sync",
         "cd /home/{{user `user`}}/opencord/incubator/voltha && git checkout master",

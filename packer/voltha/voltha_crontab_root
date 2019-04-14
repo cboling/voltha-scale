@@ -1,0 +1,6 @@
+# Docker-compose is difficult to start up after reboot, so do it with
+# this crontabl file
+
+# m h   dom mon dow   command
+
+@reboot /usr/bin/docker ps && /etc/init.d/voltha start

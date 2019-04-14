@@ -10,23 +10,41 @@
 # 
 ### END INIT INFO
 
-VOLTHA_DIR=/home/voltha/
+set -e
+
+BASE=voltha
+VOLTHA_DIR=/home/$BASE
+VOLTHA_LOG=/var/log/$BASE.log
+
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin:$VOLTHA_DIR
+
+touch "$VOLTHA_LOG"
+
+# Get lsb functions
+. /lib/lsb/init-functions
+
+if [ -f /etc/default/$BASE ]; then
+   . /etc/default/$BASE
+fi
 
 case "$1" in
   start)
+   log_begin_msg "Starting VOLTHA: $VOLTHA_DIR" >$VOLTHA_LOG 2>&1
    su voltha -c $VOLTHA_DIR/voltha_start.sh
    ;;
+
   stop)
+   log_begin_msg "Stopping VOLTHA" >$VOLTHA_LOG 2>&1
    su voltha -c $VOLTHA_DIR/voltha_stop.sh
-   sleep 10
    ;;
+
   restart)
    su voltha -c $VOLTHA_DIR/voltha_stop.sh
-   sleep 20
+   sleep 10
    su voltha -c $VOLTHA_DIR/voltha_start.sh
    ;;
-*)
 
+  *)
    echo "Usage: voltha {start|stop|restart}" >&2
    exit 3
    ;;

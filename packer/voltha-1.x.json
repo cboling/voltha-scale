@@ -3,8 +3,8 @@
     "user": "voltha",
     "password": "admin",
     "disk_size": "20000",
-    "cpus": "2",
-    "memory": "1024",
+    "cpus": "4",
+    "memory": "6144",
     "insecure_registry": "localhost:5000",
     "docker_version": "docker-ce=17.03*",
     "k8s_version": "1.11.3-*",
@@ -76,6 +76,7 @@
     {
       "type": "shell",
       "inline": [
+        "echo \"Installing python base...\"",
         "sudo apt-get update",
         "sudo apt-get install -y make curl virtualenv gcc python-dev libssl-dev libpcap-dev g++",
         "sudo apt-get install -y git htop software-properties-common httpie jq debian-keyring",
@@ -94,6 +95,7 @@
         "sudo usermod -aG docker {{user `user`}}",
         "echo \"Updating Docker Options file...\"",
         "sudo sed -i '/#DOCKER_OPTS=\"--dns 8.8.8.8 --dns 8.8.4.4\"/c\\DOCKER_OPTS=\"--dns 8.8.8.8 --dns 8.8.4.4 --insecure-registry {{ user `insecure_registry` }}\"' /etc/default/docker",
+        "echo \"Restarting Docker...\"",
         "sudo service docker restart"
       ]
     },
@@ -167,11 +169,12 @@
         "chmod a+x /tmp/repo",
         "sudo mv /tmp/repo /usr/bin",
         "mkdir -p /home/{{user `user`}}/opencord",
-        "cd /home/{{user `user`}}/opencord && repo init -u https://gerrit.opencord.org/manifest -b master",
-        "cd /home/{{user `user`}}/opencord/ && repo sync",
-        "cd /home/{{user `user`}}/opencord/incubator/voltha && git checkout master",
-        "# cd /home/{{user `user`}}/opencord/incubator/voltha && . ./env.sh && make fetch",
-        "# cd /home/{{user `user`}}/opencord/incubator/voltha && . ./env.sh && make build"
+        "cd /home/{{user `user`}}/opencord && repo init -u https://github.com/cboling/voltha-manifest -m voltha-1.x.xml",
+        "repo sync",
+        "cd incubator/voltha && git checkout master",
+        "# . ./env.sh",
+        "# make fetch",
+        "# make build"
       ]
     },
     {
@@ -271,6 +274,9 @@
     {
       "type": "shell",
       "inline": [
+        "sudo touch /var/spool/cron/crontabs/root",
+        "echo '@reboot /usr/bin/docker ps && /etc/init.d/voltha start' | sudo tee --append /var/spool/cron/crontabs/root",
+        "sudo chmod 600 /var/spool/cron/crontabs/root",
         "sudo chmod a+x voltha_start.sh",
         "sudo chmod a+x voltha_stop.sh",
         "sudo chmod a+x voltha",

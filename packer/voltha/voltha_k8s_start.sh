@@ -1,6 +1,10 @@
 #! /bin/sh
 # Disable swap
-sudo swapoff -a
+swapoff -a
+
+# No updates/upgrades wanted
+systemctl stop --now apt-daily{,-upgrade}.timer
+systemctl disable --now apt-daily{,-upgrade}.{timer,service}
 
 ###########################################################
 #docker pull localhost:5000/voltha-onu_mock

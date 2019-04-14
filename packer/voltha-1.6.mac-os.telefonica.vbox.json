@@ -2,7 +2,7 @@
   "variables": {
     "user": "voltha",
     "password": "admin",
-    "disk_size": "20000",
+    "disk_size": "80000",
     "cpus": "4",
     "memory": "6144",
     "insecure_registry": "localhost:5000",
@@ -13,8 +13,8 @@
     {
       "type": "virtualbox-iso",
       "guest_os_type": "Ubuntu_64",
-      "vm_name": "voltha-1.6",
-      "name": "voltha-1.6.ovf",
+      "vm_name": "voltha-telefonica-1.6",
+      "name": "voltha-telefonica-1.6.ovf",
       "format": "ovf",
       "disk_size": "{{ user `disk_size` }}",
       "headless": "false",
@@ -110,6 +110,70 @@
     {
       "type": "shell",
       "inline": [
+        "echo \"Installing JAVA SDK in case ONOS builds are required required...\"",
+        "echo \"\"",
+        "echo \"\"",
+        "echo \"   ***************************************************************************\"",
+        "echo \"   ****                                                                   ****\"",
+        "echo \"   **** This step can be omitted if local changes/builds are not required ****\"",
+        "echo \"   ****                                                                   ****\"",
+        "echo \"   ***************************************************************************\"",
+        "echo \"\"",
+        "echo \"\"",
+        "mkdir -p /home/{{user `user`}}/Downloads",
+        "mkdir -p /home/{{user `user`}}/Applications",
+        "cd /home/{{user `user`}}/Downloads",
+        "wget http://archive.apache.org/dist/karaf/3.0.5/apache-karaf-3.0.5.tar.gz",
+        "wget http://archive.apache.org/dist/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz",
+        "tar -zxvf apache-karaf-3.0.5.tar.gz -C ../Applications/",
+        "tar -zxvf apache-maven-3.3.9-bin.tar.gz -C ../Applications/",
+        "echo \"Installing Oracle JAVA-8\"",
+        "sudo add-apt-repository ppa:webupd8team/java -y",
+        "sudo apt-get update",
+        "echo 'oracle-java8-installer shared/accepted-oracle-license-v1-1 select true' | sudo debconf-set-selections",
+        "sudo apt-get install oracle-java8-installer oracle-java8-set-default -y",
+        "echo \"Creating directory for custom ONOS Applications\"",
+        "mkdir -p /home/{{user `user`}}/opencord/onos-apps/apps"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "echo \"Installing v1.6 support containers from Docker Hub...\"",
+        "sudo docker pull alpine:3.6",
+        "sudo docker pull centos:7",
+        "sudo docker pull centurylink/ca-certs:latest",
+        "sudo docker pull debian:stretch-slim",
+        "sudo docker pull docker.elastic.co/logstash/logstash:5.6.0",
+        "sudo docker pull lyft/envoy:29361deae91575a1d46c7a21e913f19e75622ebe",
+        "sudo docker pull maven:3-jdk-8-alpine",
+        "sudo docker pull onosproject/onos:1.10.9",
+        "sudo docker pull opennms/horizon-core-web:19.0.1-1",
+        "sudo docker pull portainer/portainer:1.15.2",
+        "sudo docker pull ubuntu:xenial",
+        "sudo docker pull docker.elastic.co/elasticsearch/elasticsearch:5.6.0",
+        "sudo docker pull kamon/grafana_graphite:latest",
+        "sudo docker pull marcelmaatkamp/freeradius:latest",
+        "sudo docker pull registry:2",
+        "sudo docker pull postgres:9.6.1",
+        "sudo docker pull quay.io/coreos/etcd:v3.2.9",
+        "sudo docker pull wurstmeister/zookeeper:latest",
+        "sudo docker pull wurstmeister/kafka:latest",
+        "sudo docker pull consul:0.9.2",
+        "sudo docker pull tianon/true:latest",
+        "sudo docker pull gliderlabs/registrator:v7",
+        "sudo docker pull fluent/fluentd:v0.12.42",
+        "sudo docker pull tpdock/freeradius:latest"
+      ]
+    },
+    {
+      "type": "file",
+      "source": "onos/apps/ctpd-olt/",
+      "destination": "/home/{{user `user`}}/opencord/onos-apps/apps/"
+    },
+    {
+      "type": "shell",
+      "inline": [
         "echo \"Installing VOLTHA Source in case local changes/builds are required...\"",
         "echo \"\"",
         "echo \"\"",
@@ -124,48 +188,28 @@
         "chmod a+x /tmp/repo",
         "sudo mv /tmp/repo /usr/bin",
         "mkdir -p /home/{{user `user`}}/opencord",
-        "cd /home/{{user `user`}}/opencord && repo init -u https://github.com/cboling/voltha-manifest -m voltha-1.6.xml",
-        "cd /home/{{user `user`}}/opencord/ && repo sync",
-        "cd /home/{{user `user`}}/opencord/voltha && git checkout voltha-1.6",
-        "# cd /home/{{user `user`}}/opencord/voltha && . ./env.sh && make fetch",
-        "# cd /home/{{user `user`}}/opencord/voltha && . ./env.sh && make build"
-      ]
-    },
-    {
-      "type": "shell",
-      "inline": [
-        "echo \"Installing latest MINIMAL VOLTHA and support containers from Docker Hub...\"",
-        "sudo docker pull wurstmeister/zookeeper:latest",
-        "sudo docker pull wurstmeister/kafka:latest",
-        "sudo docker pull consul:0.9.2",
-        "sudo docker pull gliderlabs/registrator:latest",
-        "sudo docker pull fluent/fluentd:v0.12.42",
-        "sudo docker pull voltha/voltha-envoy",
-        "sudo docker pull voltha/voltha-voltha",
-        "sudo docker pull voltha/voltha-cli",
-        "sudo docker pull voltha/voltha-ofagent",
-        "sudo docker pull tpdock/freeradius:latest",
-        "sudo docker pull voltha/voltha-onos:latest"
-      ]
-    },
-    {
-      "type": "shell",
-      "inline": [
-        "echo \"Installing latest accessory VOLTHA and support containers from Docker Hub...\"",
-        "echo \"\"",
-        "echo \"\"",
-        "echo \"   *********************************************************************\"",
-        "echo \"   ****                                                             ****\"",
-        "echo \"   **** This step can be omitted if only automated tests are needed ****\"",
-        "echo \"   ****                                                             ****\"",
-        "echo \"   *********************************************************************\"",
-        "echo \"\"",
-        "echo \"\"",
-        "sudo docker pull voltha/voltha-grafana",
-        "sudo docker pull voltha/voltha-shovel",
-        "sudo docker pull voltha/voltha-netconf",
-        "sudo docker pull voltha/voltha-nginx",
-        "sudo docker pull voltha/voltha-portainer"
+        "cd /home/{{user `user`}}/opencord && repo init -u https://github.com/cboling/voltha-manifest -m voltha-telefonica-1.6.xml -b master",
+        "repo sync",
+        "cd incubator/voltha && git checkout master",
+        "echo \"Building protoc\"",
+        ". ./env.sh",
+        "make install-protoc",
+        "#echo \"Fetching containers\"",
+        "#su {{user `user`}} -c \"(. ./env.sh && make fetch)\"",
+        "echo \"Building VOLTHA as root since still in the same SSH session and not VOLTHA user not in docker group yet\"",
+        "#echo \". ./env.sh && make fetch && make protoc protos base voltha ofagent shovel dashd cli portainer grafana consul tools envoy fluentd unum j2\" >mkbuild.sh",
+        "echo \". ./env.sh && make fetch && make -k protoc protos base ofagent shovel dashd cli portainer grafana consul tools envoy fluentd unum j2\" >mkbuild.sh",
+        "chmod a+x mkbuild.sh",
+        "ls -aFC",
+        "cat mkbuild.sh",
+        "echo \"trying it now\"",
+        "sudo ./mkbuild.sh",
+        "echo \"did it work\"",
+        "#sudo \"(. ./env.sh && make fetch && make protoc protos base voltha ofagent shovel dashd cli grafana consul tools envoy fluentd unum j2)\"",
+        "#sudo \"(. ./env.sh && make build) \"",
+        "#echo \"Fetching containers 2\"",
+        "#sudo \"(. ./env.sh && make build) \"",
+        "echo \"Build of VOLTHA completed successfully  ************\""
       ]
     },
     {
@@ -205,29 +249,22 @@
     },
     {
       "type": "file",
-      "source": "compose/docker-compose-auth-test.yml",
-      "destination": "/home/{{user `user`}}/compose/docker-compose-auth-test.yml"
-    },
-    {
-      "type": "file",
-      "source": "compose/docker-compose-min-system-test.yml",
-      "destination": "/home/{{user `user`}}/compose/docker-compose-min-system-test.yml"
+      "source": "compose/docker-compose-telefonica-test.yml",
+      "destination": "/home/{{user `user`}}/compose/docker-compose-system-test.yml"
     },
     {
       "type": "shell",
       "inline": [
-        "echo \"Cleaning up stopped containers...\"",
-        "docker ps -aq --no-trunc -f status=exited | xargs docker rm"
-      ]
-    },
-    {
-      "type": "shell",
-      "inline": [
+        "echo '@reboot /usr/bin/docker ps && /etc/init.d/voltha start' | sudo crontab -",
+        "# sudo touch /var/spool/cron/crontabs/root",
+        "# echo '@reboot /usr/bin/docker ps && /etc/init.d/voltha start' | sudo tee --append /var/spool/cron/crontabs/root",
+        "# sudo chmod 600 /var/spool/cron/crontabs/root",
         "sudo chmod a+x voltha_start.sh",
         "sudo chmod a+x voltha_stop.sh",
         "sudo chmod a+x voltha",
         "sudo cp voltha  /etc/init.d/",
-        "sudo update-rc.d voltha defaults"
+        "sudo update-rc.d voltha defaults",
+        "sudo apt autoremove -y"
       ]
     }
   ]
